@@ -1,11 +1,10 @@
-
 <!DOCTYPE html>
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#101828">
-<title>Seri Barkod Okuyucu v5.0</title>
+<title>Seri Barkod Okuyucu v7.0 (Max Hız)</title>
 
 <style>
 :root {
@@ -110,7 +109,7 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 
 <body>
 <main>
-<h1>⚡ Seri Barkod Okuyucu v5.0</h1>
+<h1>⚡ Seri Barkod Okuyucu v7.0 (Max Hız)</h1>
 
 <section class="panel">
 
@@ -133,10 +132,10 @@ button:disabled { opacity: .45; cursor: not-allowed; }
   <div class="options">
     <label for="duplicateDelay">Tekrar okuma engeli</label>
     <select id="duplicateDelay">
+      <option value="500">0.5 saniye</option>
       <option value="1000">1 saniye</option>
       <option value="1500" selected>1,5 saniye</option>
       <option value="2000">2 saniye</option>
-      <option value="3000">3 saniye</option>
       <option value="0">Engelleme yok</option>
     </select>
   </div>
@@ -220,7 +219,7 @@ let beepBusy = false;
 const DISPLAY_LIMIT = 300;
 
 // -------------------------
-// SES
+// SES (Gecikmesiz ve optimize)
 // -------------------------
 
 function beep(duplicate = false) {
@@ -249,17 +248,17 @@ function beep(duplicate = false) {
     gain.gain.setValueAtTime(0.12, now);
     gain.gain.exponentialRampToValueAtTime(
       0.001,
-      now + (duplicate ? 0.07 : 0.10)
+      now + (duplicate ? 0.05 : 0.08)
     );
 
     oscillator.connect(gain);
     gain.connect(audioCtx.destination);
 
     oscillator.start(now);
-    oscillator.stop(now + (duplicate ? 0.07 : 0.10));
+    oscillator.stop(now + (duplicate ? 0.05 : 0.08));
 
     beepBusy = true;
-    setTimeout(() => beepBusy = false, 100);
+    setTimeout(() => beepBusy = false, 50);
 
   } catch (e) {}
 }
@@ -284,7 +283,7 @@ function handleBarcode(text) {
 
     const lastBeep = lastDuplicateBeep.get(text) || 0;
 
-    if (now - lastBeep > 1800) {
+    if (now - lastBeep > 1200) {
       beep(true);
       lastDuplicateBeep.set(text, now);
     }
@@ -319,7 +318,7 @@ function handleBarcode(text) {
     document.getElementById("vibration").checked &&
     navigator.vibrate
   ) {
-    navigator.vibrate(35);
+    navigator.vibrate(25);
   }
 }
 
@@ -355,16 +354,16 @@ hints.set(
 const zxingReader = new BrowserMultiFormatReader(hints);
 
 // -------------------------
-// KAMERA KISITLAMALARI
+// KAMERA KISITLAMALARI (Düşük gecikme, yüksek kare hızı odaklı)
 // -------------------------
 
 const cameraConstraints = {
   audio: false,
   video: {
     facingMode: { ideal: "environment" },
-    width: { ideal: 1920 },
-    height: { ideal: 1080 },
-    frameRate: { ideal: 30, max: 60 }
+    width: { ideal: 1280 },
+    height: { ideal: 720 },
+    frameRate: { ideal: 60, max: 60 }
   }
 };
 
@@ -379,7 +378,6 @@ async function startScanner() {
   startBtn.disabled = true;
   statusEl.textContent = "Kamera başlatılıyor...";
 
-  // Kullanıcı etkileşiminde ses sistemini hazırla
   try {
     if (!audioCtx) audioCtx = new AudioContext();
     if (audioCtx.state === "suspended") await audioCtx.resume();
@@ -387,14 +385,11 @@ async function startScanner() {
 
   try {
 
-    // Öncelikle yüksek çözünürlüklü kamera
     try {
       stream = await navigator.mediaDevices.getUserMedia(
         cameraConstraints
       );
     } catch (firstError) {
-
-      // Bazı cihazlarda gelişmiş çözünürlük kısıtları desteklenmez
       stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: {
@@ -405,7 +400,6 @@ async function startScanner() {
 
     track = stream.getVideoTracks()[0];
 
-    // Kamera özellikleri
     const capabilities = track.getCapabilities?.() || {};
 
     const advanced = [];
@@ -429,7 +423,6 @@ async function startScanner() {
 
     await video.play();
 
-    // Video boyutları hazır olana kadar bekle
     if (!video.videoWidth) {
       await new Promise(resolve => {
         video.addEventListener("loadedmetadata", resolve, {
@@ -444,11 +437,10 @@ async function startScanner() {
     startBtn.disabled = false;
     stopBtn.disabled = false;
 
-    // Flaş desteği
     torchBtn.disabled = !capabilities.torch;
 
     // -------------------------
-    // ÖNCE NATIVE BARCODE DETECTOR
+    // ÖNCE NATIVE BARCODE DETECTOR (Max Hız)
     // -------------------------
 
     if ("BarcodeDetector" in window) {
@@ -478,7 +470,7 @@ async function startScanner() {
           });
 
           engineEl.textContent =
-            "Motor: Yerel BarcodeDetector | " +
+            "Motor: Yerel BarcodeDetector (Max Hız) | " +
             video.videoWidth + "×" + video.videoHeight;
 
           statusEl.textContent =
@@ -498,7 +490,6 @@ async function startScanner() {
     // ZXING YEDEK MOTOR
     // -------------------------
 
-    // Mevcut kamerayı kapatıp ZXing'in kamera yönetimine geç
     stream.getTracks().forEach(t => t.stop());
     stream = null;
     track = null;
@@ -543,32 +534,26 @@ async function startScanner() {
 }
 
 // -------------------------
-// HIZLI NATIVE TARAMA
+// HIZLI NATIVE TARAMA (requestAnimationFrame ile en yüksek kare yakalama hızı)
 // -------------------------
 
 async function nativeScanLoop() {
-
   if (!scanning || !detector) return;
 
-  // Aynı anda birden fazla algılama çalışmasını engelle
   try {
-
     if (video.readyState >= 2) {
-
       const results = await detector.detect(video);
-
       for (const result of results) {
         handleBarcode(result.rawValue);
       }
-
     }
-
-  } catch(error) {
-    // Tek karedeki algılama hatası taramayı durdurmasın
+  } catch (error) {
+    // Hataları yut
   }
 
   if (scanning) {
-    scanTimer = setTimeout(nativeScanLoop, 35);
+    // setTimeout yerine requestAnimationFrame kullanarak donanım hızında kare taraması sağlanır
+    requestAnimationFrame(nativeScanLoop);
   }
 }
 
@@ -599,35 +584,6 @@ torchBtn.addEventListener("click", async () => {
   }
 
 });
-
-// -------------------------
-// ZOOM
-// -------------------------
-
-async function setBestZoom() {
-
-  if (!track) return;
-
-  try {
-
-    const caps = track.getCapabilities?.();
-
-    if (caps?.zoom) {
-
-      const zoom = Math.min(
-        caps.zoom.max,
-        Math.max(caps.zoom.min, 1.5)
-      );
-
-      await track.applyConstraints({
-        advanced: [{ zoom }]
-      });
-
-    }
-
-  } catch(e) {}
-
-}
 
 // -------------------------
 // KAMERA KAPAT
@@ -772,7 +728,6 @@ clearBtn.addEventListener("click", clearList);
 downloadBtn.addEventListener("click", downloadTxt);
 copyBtn.addEventListener("click", copyCodes);
 
-// Sayfa kapatılırken kamerayı serbest bırak
 window.addEventListener("pagehide", () => {
   scanning = false;
 
