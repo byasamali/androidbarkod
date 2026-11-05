@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Seri Barkod Okuyucu - v4.1</title>
+  <title>Seri Barkod Okuyucu - v4.2</title>
   <style>
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: #f3f5f9; color: #172033; padding: 16px; }
@@ -20,7 +20,7 @@
 </head>
 <body>
 <main style="max-width: 600px; margin: 0 auto;">
-  <h1>⚡ Seri Barkod Okuyucu (v4.1)</h1>
+  <h1>⚡ Seri Barkod Okuyucu (v4.2)</h1>
 
   <section class="panel">
     <video id="video" playsinline muted></video>
@@ -49,6 +49,8 @@
   const reader = new BrowserMultiFormatReader();
   let controls = null;
   let codes = [];
+  let lastScanned = "";
+  let lastTime = 0;
   let audioCtx = null;
 
   function playBeep() {
@@ -84,23 +86,31 @@
     }
 
     try {
-      controls = await reader.decodeFromVideoDevice(
-        undefined,
+      // Arka kamerayı doğrudan zorunlu kılan kısıtlama
+      const constraints = { video: { facingMode: "environment" } };
+
+      controls = await reader.decodeFromConstraints(
+        constraints,
         video,
         (result, error) => {
           if (result) {
             const text = result.getText();
-            // Bekleme süresi kaldırıldı, her okunan anında eklenir
-            codes.unshift(text);
-            updateUI();
-            playBeep();
-            if (navigator.vibrate) navigator.vibrate(40);
+            const now = Date.now();
+            // Aynı barkod için çok kısa koruma (400ms), farklı barkodlar veya seri geçişler anında okunur
+            if (text !== lastScanned || (now - lastTime > 400)) {
+              codes.unshift(text);
+              lastScanned = text;
+              lastTime = now;
+              updateUI();
+              playBeep();
+              if (navigator.vibrate) navigator.vibrate(40);
+            }
           }
         }
       );
 
       document.getElementById("stopBtn").style.display = "block";
-      document.getElementById("status").textContent = "Seri okuma aktif. Barkodları peş peşe okutabilirsiniz.";
+      document.getElementById("status").textContent = "Arka kamera aktif. Barkodları okutabilirsiniz.";
     } catch (err) {
       document.getElementById("startBtn").style.display = "block";
       video.style.display = "none";
