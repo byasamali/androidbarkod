@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Seri Barkod Okuyucu - v4.2</title>
+  <title>Seri Barkod Okuyucu - v4.3</title>
   <style>
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: #f3f5f9; color: #172033; padding: 16px; }
@@ -20,7 +20,7 @@
 </head>
 <body>
 <main style="max-width: 600px; margin: 0 auto;">
-  <h1>⚡ Seri Barkod Okuyucu (v4.2)</h1>
+  <h1>⚡ Seri Barkod Okuyucu (v4.3)</h1>
 
   <section class="panel">
     <video id="video" playsinline muted></video>
@@ -53,7 +53,8 @@
   let lastTime = 0;
   let audioCtx = null;
 
-  function playBeep() {
+  // Frekansa göre farklı bip sesleri (isDuplicate = true ise kalın, false ise ince ton)
+  function playBeep(isDuplicate = false) {
     try {
       if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -65,14 +66,15 @@
       const gain = audioCtx.createGain();
       
       osc.type = "sine";
-      osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+      // Yeni barkod için ince ses (1000Hz), mükerrer için kalın ses (500Hz)
+      osc.frequency.setValueAtTime(isDuplicate ? 500 : 1000, audioCtx.currentTime);
       gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
       
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.1);
+      osc.stop(audioCtx.currentTime + (isDuplicate ? 0.08 : 0.12));
     } catch (e) {}
   }
 
@@ -86,7 +88,6 @@
     }
 
     try {
-      // Arka kamerayı doğrudan zorunlu kılan kısıtlama
       const constraints = { video: { facingMode: "environment" } };
 
       controls = await reader.decodeFromConstraints(
@@ -96,15 +97,20 @@
           if (result) {
             const text = result.getText();
             const now = Date.now();
-            // Aynı barkod için çok kısa koruma (400ms), farklı barkodlar veya seri geçişler anında okunur
-            if (text !== lastScanned || (now - lastTime > 400)) {
-              codes.unshift(text);
-              lastScanned = text;
-              lastTime = now;
-              updateUI();
-              playBeep();
-              if (navigator.vibrate) navigator.vibrate(40);
+            
+            // Aynı barkod kısa sürede tekrar okunursa (mükerrer)
+            if (text === lastScanned && (now - lastTime < 1500)) {
+              playBeep(true); // Mükerrer için farklı (kalın) ses çal
+              return;
             }
+
+            // Yeni veya süre aşımı geçmiş barkod
+            codes.unshift(text);
+            lastScanned = text;
+            lastTime = now;
+            updateUI();
+            playBeep(false); // Yeni barkod için normal ince ses
+            if (navigator.vibrate) navigator.vibrate(40);
           }
         }
       );
