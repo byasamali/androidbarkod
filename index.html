@@ -3,209 +3,128 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#172554">
-  <title>Barkod Okuyucu</title>
+  <title>Seri Barkod Okuyucu</title>
   <style>
-    :root { color-scheme: light; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-    * { box-sizing: border-box; }
-    body { margin: 0; background: #f3f5f9; color: #172033; }
-    main { max-width: 620px; margin: 0 auto; padding: 20px 16px 36px; }
-    h1 { font-size: 1.5rem; margin: 0 0 6px; }
-    .sub { color: #667085; margin: 0 0 18px; font-size: .95rem; }
-    .panel { background: white; border: 1px solid #e2e7ef; border-radius: 16px; padding: 16px; margin: 14px 0; box-shadow: 0 3px 12px #18223008; }
-    video { width: 100%; max-height: 320px; object-fit: cover; background: #101828; border-radius: 12px; display: none; }
-    .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 12px; }
-    button { border: 0; border-radius: 11px; padding: 12px 15px; font-size: 1rem; font-weight: 600; cursor: pointer; }
-    button:disabled { opacity: .45; cursor: not-allowed; }
+    :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+    body { margin: 0; background: #f3f5f9; color: #172033; padding: 16px; }
+    .panel { background: white; border: 1px solid #e2e7ef; border-radius: 16px; padding: 16px; margin: 12px auto; max-width: 600px; box-shadow: 0 3px 12px rgba(0,0,0,0.05); }
+    #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; display: none; }
+    button { border: 0; border-radius: 11px; padding: 12px 18px; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
     .primary { background: #1d4ed8; color: white; }
     .secondary { background: #e8edf5; color: #172033; }
     .danger { background: #fee4e2; color: #b42318; }
-    .status { color: #475467; font-size: .9rem; margin-top: 10px; min-height: 1.2em; }
-    .list-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
-    .list-head h2 { font-size: 1.1rem; margin: 0; }
-    #count { color: #667085; font-size: .9rem; }
-    ol { padding-left: 28px; margin: 14px 0 0; }
-    li { padding: 8px 0 8px 3px; border-bottom: 1px solid #edf0f5; overflow-wrap: anywhere; }
-    .remove { float: right; padding: 4px 8px; margin-left: 8px; font-size: .8rem; background: #f2f4f7; }
-    .empty { color: #667085; text-align: center; padding: 18px 0 6px; }
-    .note { font-size: .85rem; color: #667085; line-height: 1.45; }
-    input { width: 100%; border: 1px solid #d0d5dd; border-radius: 10px; padding: 12px; font-size: 1rem; margin-top: 8px; }
+    .list-head { display: flex; justify-content: space-between; align-items: center; }
+    ol { padding-left: 20px; max-height: 200px; overflow-y: auto; }
+    li { padding: 6px 0; border-bottom: 1px solid #edf0f5; word-break: break-all; }
   </style>
 </head>
 <body>
-<main>
-  <h1>📷 Barkod Okuyucu</h1>
-  <p class="sub">Barkodları okut, listele ve TXT olarak indir.</p>
+<main style="max-width: 600px; margin: 0 auto;">
+  <h1>⚡ Seri Barkod Okuyucu</h1>
 
   <section class="panel">
-    <video id="video" playsinline muted></video>
-    <div class="actions">
-      <button id="start" class="primary">Kamerayı aç</button>
-      <button id="stop" class="secondary" disabled>Kamerayı kapat</button>
-    </div>
-    <div id="status" class="status" role="status">Kamerayı açmak için düğmeye dokunun.</div>
-    <p class="note">Kamera izni isteyebilir. iPhone'da kamera için sayfanın HTTPS üzerinden açılması gerekir.</p>
-  </section>
-
-  <section class="panel">
-    <label for="manual"><strong>Elle barkod ekle</strong></label>
-    <input id="manual" inputmode="numeric" autocomplete="off" placeholder="Barkod numarasını gir">
-    <div class="actions">
-      <button id="add" class="secondary">Listeye ekle</button>
-    </div>
+    <div id="reader"></div>
+    <button id="startBtn" class="primary" onclick="startScanner()">Kamerayı Aç ve Okumaya Başla</button>
+    <button id="stopBtn" class="secondary" onclick="stopScanner()" style="display:none;">Kamerayı Kapat</button>
+    <p id="status" style="font-size:0.9rem; color:#667085; text-align:center; margin-top:10px;">Kamerayı açmak için dokunun.</p>
   </section>
 
   <section class="panel">
     <div class="list-head">
-      <h2>Okunan barkodlar</h2>
+      <h2>Okunanlar</h2>
       <span id="count">0 adet</span>
     </div>
-    <div id="empty" class="empty">Henüz barkod okunmadı.</div>
     <ol id="list"></ol>
-    <div class="actions">
-      <button id="download" class="primary" disabled>TXT indir</button>
-      <button id="clear" class="danger" disabled>Listeyi temizle</button>
+    <div style="display: flex; gap: 10px;">
+      <button id="downloadBtn" class="primary" onclick="downloadTxt()" disabled>TXT İndir</button>
+      <button class="danger" onclick="clearList()">Temizle</button>
     </div>
   </section>
-  <p class="note">Barkodlar bu sayfa açık olduğu sürece cihazda tutulur. Sayfayı kapatıp yeniden açarsanız liste sıfırlanır; kaybetmemek için TXT olarak indirin.</p>
 </main>
 
-<script type="module">
-  import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
-
-  const video = document.getElementById("video");
-  const startBtn = document.getElementById("start");
-  const stopBtn = document.getElementById("stop");
-  const statusEl = document.getElementById("status");
-  const listEl = document.getElementById("list");
-  const countEl = document.getElementById("count");
-  const emptyEl = document.getElementById("empty");
-  const downloadBtn = document.getElementById("download");
-  const clearBtn = document.getElementById("clear");
-  const manualInput = document.getElementById("manual");
-
-  const reader = new BrowserMultiFormatReader();
-  let controls = null;
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+  let html5QrCode;
   let codes = [];
-  let lastCode = "";
-  let lastReadAt = 0;
+  let lastScanned = "";
+  let lastTime = 0;
 
-  function setStatus(message) { statusEl.textContent = message; }
+  async function startScanner() {
+    document.getElementById("startBtn").style.display = "none";
+    document.getElementById("reader").style.display = "block";
+    document.getElementById("status").textContent = "Kamera başlatılıyor...";
 
-  function addCode(raw) {
-    const code = String(raw || "").trim();
-    if (!code) return;
-    codes.push(code); // Aynı barkod tekrar okutulursa tekrar eklenir.
-    render();
-    setStatus("Eklendi: " + code);
+    try {
+      if (!html5QrCode) {
+        html5QrCode = new Html5Qrcode("reader");
+      }
+
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 20, qrbox: { width: 250, height: 150 } },
+        (decodedText) => {
+          const now = Date.now();
+          // Aynı barkodun 1.5 saniye içinde üst üste eklenmesini engelle, seri geçişe izin ver
+          if (decodedText !== lastScanned || (now - lastTime > 1500)) {
+            codes.unshift(decodedText); // En son okunanı en üste ekle
+            lastScanned = decodedText;
+            lastTime = now;
+            updateUI();
+            
+            // Kısa bir titreşim geri bildirimi (destekleyen cihazlarda hızlı okunduğunu gösterir)
+            if (navigator.vibrate) navigator.vibrate(50);
+          }
+        },
+        (errorMessage) => {}
+      );
+
+      document.getElementById("stopBtn").style.display = "block";
+      document.getElementById("status").textContent = "Kamerayı barkoda tutun, arka arkaya okutabilirsiniz.";
+    } catch (err) {
+      document.getElementById("startBtn").style.display = "block";
+      document.getElementById("reader").style.display = "none";
+      document.getElementById("status").textContent = "Kamera açılamadı. İzinleri kontrol edin.";
+    }
   }
 
-  function render() {
+  async function stopScanner() {
+    if (html5QrCode && html5QrCode.isScanning) {
+      await html5QrCode.stop();
+    }
+    document.getElementById("reader").style.display = "none";
+    document.getElementById("stopBtn").style.display = "none";
+    document.getElementById("startBtn").style.display = "block";
+    document.getElementById("status").textContent = "Kamera kapatıldı.";
+  }
+
+  function updateUI() {
+    const listEl = document.getElementById("list");
     listEl.replaceChildren();
-    codes.forEach((code, index) => {
+    codes.forEach(code => {
       const li = document.createElement("li");
-      li.append(document.createTextNode(code));
-      const remove = document.createElement("button");
-      remove.className = "remove";
-      remove.textContent = "Sil";
-      remove.setAttribute("aria-label", `${index + 1}. barkodu sil`);
-      remove.addEventListener("click", () => {
-        codes.splice(index, 1);
-        render();
-      });
-      li.append(remove);
+      li.textContent = code;
       listEl.append(li);
     });
-    countEl.textContent = `${codes.length} adet`;
-    emptyEl.hidden = codes.length > 0;
-    downloadBtn.disabled = codes.length === 0;
-    clearBtn.disabled = codes.length === 0;
+    document.getElementById("count").textContent = codes.length + " adet";
+    document.getElementById("downloadBtn").disabled = codes.length === 0;
   }
 
-  async function stopCamera() {
-    if (controls) {
-      controls.stop();
-      controls = null;
+  function clearList() {
+    if (confirm("Liste temizlensin mi?")) {
+      codes = [];
+      updateUI();
     }
-    if (video.srcObject) {
-      video.srcObject.getTracks().forEach(track => track.stop());
-      video.srcObject = null;
-    }
-    video.style.display = "none";
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
   }
 
-  startBtn.addEventListener("click", async () => {
-    if (!window.isSecureContext) {
-      setStatus("Kamera için HTTPS bağlantısı gerekir. Dosyayı doğrudan açmak yerine HTTPS üzerinden yayınlayın.");
-      return;
-    }
-    if (!navigator.mediaDevices?.getUserMedia) {
-      setStatus("Bu tarayıcı kamera erişimini desteklemiyor.");
-      return;
-    }
-    try {
-      startBtn.disabled = true;
-      setStatus("Kamera açılıyor…");
-      video.style.display = "block";
-      controls = await reader.decodeFromVideoDevice(
-        undefined,
-        video,
-        (result, error, ctrl) => {
-          if (result) {
-            const text = result.getText();
-            const now = Date.now();
-            // Aynı karedeki aynı barkodun sürekli eklenmesini engelle.
-            if (text !== lastCode || now - lastReadAt > 1800) {
-              addCode(text);
-              lastCode = text;
-              lastReadAt = now;
-            }
-          }
-        }
-      );
-      stopBtn.disabled = false;
-      setStatus("Barkodu kameranın içine hizalayın.");
-    } catch (err) {
-      startBtn.disabled = false;
-      video.style.display = "none";
-      setStatus("Kamera açılamadı. Tarayıcı kamera iznini kontrol edin. (" + (err?.message || "hata") + ")");
-    }
-  });
-
-  stopBtn.addEventListener("click", stopCamera);
-
-  document.getElementById("add").addEventListener("click", () => {
-    addCode(manualInput.value);
-    manualInput.value = "";
-    manualInput.focus();
-  });
-  manualInput.addEventListener("keydown", event => {
-    if (event.key === "Enter") document.getElementById("add").click();
-  });
-
-  downloadBtn.addEventListener("click", () => {
+  function downloadTxt() {
     const blob = new Blob([codes.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "barkodlar.txt";
-    document.body.append(a);
+    a.download = "seri-barkodlar.txt";
     a.click();
-    a.remove();
     URL.revokeObjectURL(url);
-  });
-
-  clearBtn.addEventListener("click", () => {
-    if (confirm("Listedeki tüm barkodlar silinsin mi?")) {
-      codes = [];
-      render();
-      setStatus("Liste temizlendi.");
-    }
-  });
-
-  render();
+  }
 </script>
 </body>
 </html>
