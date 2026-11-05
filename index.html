@@ -48,11 +48,43 @@
   let codes = [];
   let lastScanned = "";
   let lastTime = 0;
+  let audioCtx = null;
+
+  // Barkod okunduğunda bip sesi çıkaran fonksiyon
+  function playBeep() {
+    try {
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1000, audioCtx.currentTime); // 1000 Hz net bip tonu
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime); // Ses seviyesi
+      
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.12); // 120 milisaniye uzunluğunda kısa bip
+    } catch (e) {
+      console.error("Ses çalınamadı:", e);
+    }
+  }
 
   async function startScanner() {
     document.getElementById("startBtn").style.display = "none";
     document.getElementById("reader").style.display = "block";
     document.getElementById("status").textContent = "Kamera başlatılıyor...";
+
+    // iOS ses kısıtlamasını aşmak için kullanıcı butona bastığında audio context'i başlatıyoruz
+    if (!audioCtx) {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
 
     try {
       if (!html5QrCode) {
@@ -64,14 +96,14 @@
         { fps: 20, qrbox: { width: 250, height: 150 } },
         (decodedText) => {
           const now = Date.now();
-          // Aynı barkodun 1.5 saniye içinde üst üste eklenmesini engelle, seri geçişe izin ver
           if (decodedText !== lastScanned || (now - lastTime > 1500)) {
-            codes.unshift(decodedText); // En son okunanı en üste ekle
+            codes.unshift(decodedText);
             lastScanned = decodedText;
             lastTime = now;
             updateUI();
             
-            // Kısa bir titreşim geri bildirimi (destekleyen cihazlarda hızlı okunduğunu gösterir)
+            // Bip sesi çal ve titreşim gönder
+            playBeep();
             if (navigator.vibrate) navigator.vibrate(50);
           }
         },
