@@ -8,7 +8,7 @@
     :root { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { margin: 0; background: #f3f5f9; color: #172033; padding: 16px; }
     .panel { background: white; border: 1px solid #e2e7ef; border-radius: 16px; padding: 16px; margin: 12px auto; max-width: 600px; box-shadow: 0 3px 12px rgba(0,0,0,0.05); }
-    #reader { width: 100%; border-radius: 12px; overflow: hidden; background: #000; display: none; }
+    video { width: 100%; max-height: 320px; object-fit: cover; background: #000; border-radius: 12px; display: none; }
     button { border: 0; border-radius: 11px; padding: 12px 18px; font-size: 1rem; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
     .primary { background: #1d4ed8; color: white; }
     .secondary { background: #e8edf5; color: #172033; }
@@ -23,7 +23,7 @@
   <h1>⚡ Seri Barkod Okuyucu</h1>
 
   <section class="panel">
-    <div id="reader"></div>
+    <video id="video" playsinline muted></video>
     <button id="startBtn" class="primary" onclick="startScanner()">Kamerayı Aç ve Okumaya Başla</button>
     <button id="stopBtn" class="secondary" onclick="stopScanner()" style="display:none;">Kamerayı Kapat</button>
     <p id="status" style="font-size:0.9rem; color:#667085; text-align:center; margin-top:10px;">Kamerayı açmak için dokunun.</p>
@@ -42,15 +42,17 @@
   </section>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
-<script>
-  let html5QrCode;
+<script type="module">
+  import { BrowserMultiFormatReader } from "https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm";
+
+  const video = document.getElementById("video");
+  const reader = new BrowserMultiFormatReader();
+  let controls = null;
   let codes = [];
   let lastScanned = "";
   let lastTime = 0;
   let audioCtx = null;
 
-  // Barkod okunduğunda bip sesi çıkaran fonksiyon
   function playBeep() {
     try {
       if (!audioCtx) {
@@ -63,67 +65,65 @@
       const gain = audioCtx.createGain();
       
       osc.type = "sine";
-      osc.frequency.setValueAtTime(1000, audioCtx.currentTime); // 1000 Hz net bip tonu
-      gain.gain.setValueAtTime(0.15, audioCtx.currentTime); // Ses seviyesi
+      osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
       
       osc.connect(gain);
       gain.connect(audioCtx.destination);
       
       osc.start();
-      osc.stop(audioCtx.currentTime + 0.12); // 120 milisaniye uzunluğunda kısa bip
-    } catch (e) {
-      console.error("Ses çalınamadı:", e);
-    }
+      osc.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {}
   }
 
-  async function startScanner() {
+  window.startScanner = async function() {
     document.getElementById("startBtn").style.display = "none";
-    document.getElementById("reader").style.display = "block";
+    video.style.display = "block";
     document.getElementById("status").textContent = "Kamera başlatılıyor...";
 
-    // iOS ses kısıtlamasını aşmak için kullanıcı butona bastığında audio context'i başlatıyoruz
     if (!audioCtx) {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
 
     try {
-      if (!html5QrCode) {
-        html5QrCode = new Html5Qrcode("reader");
-      }
-
-      await html5QrCode.start(
-        { facingMode: "environment" },
-        { fps: 20, qrbox: { width: 250, height: 150 } },
-        (decodedText) => {
-          const now = Date.now();
-          if (decodedText !== lastScanned || (now - lastTime > 1500)) {
-            codes.unshift(decodedText);
-            lastScanned = decodedText;
-            lastTime = now;
-            updateUI();
-            
-            // Bip sesi çal ve titreşim gönder
-            playBeep();
-            if (navigator.vibrate) navigator.vibrate(50);
+      controls = await reader.decodeFromVideoDevice(
+        undefined,
+        video,
+        (result, error) => {
+          if (result) {
+            const text = result.getText();
+            const now = Date.now();
+            if (text !== lastScanned || (now - lastTime > 1500)) {
+              codes.unshift(text);
+              lastScanned = text;
+              lastTime = now;
+              updateUI();
+              playBeep();
+              if (navigator.vibrate) navigator.vibrate(50);
+            }
           }
-        },
-        (errorMessage) => {}
+        }
       );
 
       document.getElementById("stopBtn").style.display = "block";
-      document.getElementById("status").textContent = "Kamerayı barkoda tutun, arka arkaya okutabilirsiniz.";
+      document.getElementById("status").textContent = "Barkodu kameraya hizalayın, otomatik okuyacaktır.";
     } catch (err) {
       document.getElementById("startBtn").style.display = "block";
-      document.getElementById("reader").style.display = "none";
-      document.getElementById("status").textContent = "Kamera açılamadı. İzinleri kontrol edin.";
+      video.style.display = "none";
+      document.getElementById("status").textContent = "Kamera açılamadı: " + (err?.message || "İzin hatası");
     }
   }
 
-  async function stopScanner() {
-    if (html5QrCode && html5QrCode.isScanning) {
-      await html5QrCode.stop();
+  window.stopScanner = async function() {
+    if (controls) {
+      controls.stop();
+      controls = null;
     }
-    document.getElementById("reader").style.display = "none";
+    if (video.srcObject) {
+      video.srcObject.getTracks().forEach(track => track.stop());
+      video.srcObject = null;
+    }
+    video.style.display = "none";
     document.getElementById("stopBtn").style.display = "none";
     document.getElementById("startBtn").style.display = "block";
     document.getElementById("status").textContent = "Kamera kapatıldı.";
@@ -141,14 +141,14 @@
     document.getElementById("downloadBtn").disabled = codes.length === 0;
   }
 
-  function clearList() {
+  window.clearList = function() {
     if (confirm("Liste temizlensin mi?")) {
       codes = [];
       updateUI();
     }
   }
 
-  function downloadTxt() {
+  window.downloadTxt = function() {
     const blob = new Blob([codes.join("\n") + "\n"], { type: "text/plain;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
